@@ -201,9 +201,9 @@ namespace ManagedNativeWifi
 		{
 			using (var container = new DisposableContainer<Base.WlanClient>(client))
 			{
-				foreach (var interfaceInfo in Base.GetInterfaceInfoList(container.Content.Handle))
+				foreach (var interfaceInfo in EnumerateInterfaces(container.Content))
 				{
-					foreach (var availableNetwork in Base.GetAvailableNetworkList(container.Content.Handle, interfaceInfo.InterfaceGuid))
+					foreach (var availableNetwork in GetAvailableNetworkList(container.Content, interfaceInfo))
 						yield return new NetworkIdentifier(availableNetwork.dot11Ssid);
 				}
 			}
@@ -236,6 +236,29 @@ namespace ManagedNativeWifi
 		}
 
 		/// <summary>
+		/// Remove duplicate networks without profile name.
+		/// </summary>
+		internal static IEnumerable<WLAN_AVAILABLE_NETWORK> GetAvailableNetworkList(Base.WlanClient client, InterfaceInfo interfaceInfo)
+		{
+			IEnumerable<WLAN_AVAILABLE_NETWORK> availableNetworks =
+				Base.GetAvailableNetworkList(client.Handle, interfaceInfo.Id);
+			foreach (var availableNetwork in availableNetworks)
+			{
+				bool hasProfileName = !string.IsNullOrEmpty(availableNetwork.strProfileName);
+				/* SequenceEqual returns true if the two source sequences are of equal length
+				   and their corresponding elements are equal according to the default equality
+				   comparer for their type; otherwise, false. */
+				bool instanceWithProfileExists = availableNetworks.Where(n =>
+				n.dot11Ssid.ucSSID.SequenceEqual(availableNetwork.dot11Ssid.ucSSID) &&
+				!string.IsNullOrEmpty(n.strProfileName)).Any();
+				if (!instanceWithProfileExists || hasProfileName)
+				{
+					yield return availableNetwork;
+				}
+			}
+		}
+
+		/// <summary>
 		/// Enumerates wireless LAN information on available networks.
 		/// </summary>
 		/// <returns>Wireless LAN information on available networks</returns>
@@ -252,20 +275,26 @@ namespace ManagedNativeWifi
 		{
 			using (var container = new DisposableContainer<Base.WlanClient>(client))
 			{
-				foreach (var interfaceInfo in EnumerateInterfaces(container.Content))
+				foreach (var interfaceInfo in EnumerateInterfaceConnections(container.Content))
 				{
-					foreach (var availableNetwork in Base.GetAvailableNetworkList(container.Content.Handle, interfaceInfo.Id))
+					foreach (var availableNetwork in GetAvailableNetworkList(container.Content, interfaceInfo))
 					{
-						if (!BssTypeConverter.TryConvert(availableNetwork.dot11BssType, out BssType bssType))
-							continue;
-
-						yield return new AvailableNetworkPack(
-							interfaceInfo: interfaceInfo,
-							ssid: new NetworkIdentifier(availableNetwork.dot11Ssid),
-							bssType: bssType,
-							signalQuality: (int)availableNetwork.wlanSignalQuality,
-							isSecurityEnabled: availableNetwork.bSecurityEnabled,
-							profileName: availableNetwork.strProfileName);
+						if (BssTypeConverter.TryConvert(availableNetwork.dot11BssType, out BssType bssType) &&
+							AuthenticationMethodConverter.TryConvert(availableNetwork.dot11DefaultAuthAlgorithm, out AuthenticationMethod authenticationMethod) &&
+							EncryptionTypeConverter.TryConvert(availableNetwork.dot11DefaultCipherAlgorithm, out EncryptionType encryptionType))
+						{
+							yield return new AvailableNetworkPack(
+									interfaceInfo: interfaceInfo,
+									ssid: new NetworkIdentifier(availableNetwork.dot11Ssid),
+									bssType: bssType,
+									signalQuality: (int)availableNetwork.wlanSignalQuality,
+									isSecurityEnabled: availableNetwork.bSecurityEnabled,
+									profileName: availableNetwork.strProfileName,
+									isNetworkConnectable: availableNetwork.bNetworkConnectable,
+									wlanNotConnectableReason: availableNetwork.bNetworkConnectable ? string.Empty : Base.GetStringForReasonCode(availableNetwork.wlanNotConnectableReason),
+									authenticationMethod: authenticationMethod,
+									encryptionType: encryptionType);
+						}
 					}
 				}
 			}
@@ -288,7 +317,7 @@ namespace ManagedNativeWifi
 		{
 			using (var container = new DisposableContainer<Base.WlanClient>(client))
 			{
-				foreach (var interfaceInfo in EnumerateInterfaces(container.Content))
+				foreach (var interfaceInfo in EnumerateInterfaceConnections(container.Content))
 				{
 					foreach (var availableNetworkGroup in EnumerateAvailableNetworkGroups(container.Content, interfaceInfo))
 						yield return availableNetworkGroup;
@@ -296,26 +325,33 @@ namespace ManagedNativeWifi
 			}
 		}
 
-		private static IEnumerable<AvailableNetworkGroupPack> EnumerateAvailableNetworkGroups(Base.WlanClient client, InterfaceInfo interfaceInfo)
+		private static IEnumerable<AvailableNetworkGroupPack> EnumerateAvailableNetworkGroups(Base.WlanClient client, InterfaceConnectionInfo interfaceInfo)
 		{
-			foreach (var availableNetwork in Base.GetAvailableNetworkList(client.Handle, interfaceInfo.Id))
+			foreach (var availableNetwork in GetAvailableNetworkList(client, interfaceInfo))
 			{
-				if (!BssTypeConverter.TryConvert(availableNetwork.dot11BssType, out BssType bssType))
-					continue;
+				if (BssTypeConverter.TryConvert(availableNetwork.dot11BssType, out BssType bssType) &&
+					AuthenticationMethodConverter.TryConvert(availableNetwork.dot11DefaultAuthAlgorithm, out AuthenticationMethod authenticationMethod) &&
+					EncryptionTypeConverter.TryConvert(availableNetwork.dot11DefaultCipherAlgorithm, out EncryptionType encryptionType))
+				{
 
-				var bssNetworks = Base.GetNetworkBssEntryList(client.Handle, interfaceInfo.Id,
+					var bssNetworks = Base.GetNetworkBssEntryList(client.Handle, interfaceInfo.Id,
 					availableNetwork.dot11Ssid, availableNetwork.dot11BssType, availableNetwork.bSecurityEnabled)
 					.Select(x => TryConvertBssNetwork(interfaceInfo, x, out BssNetworkPack bssNetwork) ? bssNetwork : null)
 					.Where(x => x != null);
 
-				yield return new AvailableNetworkGroupPack(
-					interfaceInfo: interfaceInfo,
-					ssid: new NetworkIdentifier(availableNetwork.dot11Ssid),
-					bssType: bssType,
-					signalQuality: (int)availableNetwork.wlanSignalQuality,
-					isSecurityEnabled: availableNetwork.bSecurityEnabled,
-					profileName: availableNetwork.strProfileName,
-					bssNetworks: bssNetworks);
+					yield return new AvailableNetworkGroupPack(
+						interfaceInfo: interfaceInfo,
+						ssid: new NetworkIdentifier(availableNetwork.dot11Ssid),
+						bssType: bssType,
+						signalQuality: (int)availableNetwork.wlanSignalQuality,
+						isSecurityEnabled: availableNetwork.bSecurityEnabled,
+						profileName: availableNetwork.strProfileName,
+						isNetworkConnectable: availableNetwork.bNetworkConnectable,
+						wlanNotConnectableReason: availableNetwork.bNetworkConnectable ? string.Empty : Base.GetStringForReasonCode(availableNetwork.wlanNotConnectableReason),
+						authenticationMethod: authenticationMethod,
+						encryptionType: encryptionType,
+						bssNetworks: bssNetworks);
+				}
 			}
 		}
 
@@ -517,6 +553,48 @@ namespace ManagedNativeWifi
 		}
 
 		/// <summary>
+		/// The WlanSetProfileEapXmlUserData function sets the Extensible Authentication Protocol (EAP) user
+		/// credentials as specified by an XML string. The user credentials apply to a profile on an adapter.
+		/// These credentials can only be used by the caller.
+		/// </summary>
+		/// <param name="interfaceId">Interface ID</param>
+		/// <param name="profileName">The name of the profile associated with the EAP user data</param>
+		/// <param name="userDataXML">A pointer to XML data used to set the user credentials</param>
+		/// <returns>True if successfully set. False if failed.</returns>
+		/// <remarks>
+		/// The XML data must be based on the EAPHost User Credentials schema.
+		/// To view sample user credential XML data, see EAPHost User Properties:
+		/// http://msdn.microsoft.com/en-us/library/windows/desktop/bb204765(v=vs.85).aspx
+		/// https://docs.microsoft.com/en-us/windows/desktop/api/wlanapi/nf-wlanapi-wlansetprofileeapxmluserdata
+		/// The (Enterprise PEAP) Credentials are stored in the Windows 10 registry.
+		/// HKEY_CURRENT_USER\Software\Microsoft\Wlansvc\UserData\Profiles\{profileID}\
+		/// HKEY_LOCAL_MACHINE\Software\Microsoft\Wlansvc\UserData\Profiles\{profileID}\
+		/// HKEY_LOCAL_MACHINE\Software\Microsoft\Wlansvc\Profiles\{profileID}\
+		/// https://github.com/ash47/EnterpriseWifiPasswordRecover
+		/// </remarks>
+		public static bool SetEAPProfile(Guid interfaceId, string profileName, string userDataXML)
+		{
+			return SetEAPProfile(null, interfaceId, profileName, userDataXML);
+		}
+
+		internal static bool SetEAPProfile(Base.WlanClient client, Guid interfaceId, string profileName, string userDataXML)
+		{
+			if (interfaceId == Guid.Empty)
+				throw new ArgumentException(nameof(interfaceId));
+
+			if (string.IsNullOrWhiteSpace(profileName))
+				throw new ArgumentNullException(nameof(profileName));
+
+			if (string.IsNullOrWhiteSpace(userDataXML))
+				throw new ArgumentNullException(nameof(userDataXML));
+
+			using (var container = new DisposableContainer<Base.WlanClient>(client))
+			{
+				return Base.SetProfileEapXmlUserData(container.Content.Handle, interfaceId, profileName, SetEapUserDataMode.None, userDataXML);
+			}
+		}
+
+		/// <summary>
 		/// Sets the position of a specified wireless profile in preference order.
 		/// </summary>
 		/// <param name="interfaceId">Interface ID</param>
@@ -692,7 +770,13 @@ namespace ManagedNativeWifi
 					switch ((WLAN_NOTIFICATION_ACM)data.NotificationCode)
 					{
 						case WLAN_NOTIFICATION_ACM.wlan_notification_acm_connection_complete:
-							Task.Run(() => tcs.TrySetResult(true));
+							// The connection succeeded if the wlanReasonCode in WLAN_CONNECTION_NOTIFICATION_DATA
+							// is WLAN_REASON_CODE_SUCCESS. Otherwise, the connection has failed.
+							// https://docs.microsoft.com/en-us/windows/desktop/api/wlanapi/ne-wlanapi-_wlan_notification_acm
+							if (connectionNotificationData.wlanReasonCode == 0)
+							{
+								Task.Run(() => tcs.TrySetResult(true));
+							}
 							break;
 						case WLAN_NOTIFICATION_ACM.wlan_notification_acm_connection_attempt_fail:
 							// This notification will not always mean that a connection has failed.

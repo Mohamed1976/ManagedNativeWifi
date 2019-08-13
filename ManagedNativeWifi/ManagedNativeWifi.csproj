@@ -43,6 +43,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Common\DisposableContainer.cs" />
+    <Compile Include="KeyTypes.cs" />
     <Compile Include="Win32\BaseMethod.cs" />
     <Compile Include="Win32\NativeMethod.cs" />
     <Compile Include="Win32\SafeClientHandle.cs" />

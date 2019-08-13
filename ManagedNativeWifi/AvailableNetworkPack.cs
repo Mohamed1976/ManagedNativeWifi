@@ -14,7 +14,7 @@ namespace ManagedNativeWifi
 		/// <summary>
 		/// Associated wireless interface information
 		/// </summary>
-		public InterfaceInfo Interface { get; }
+		public InterfaceConnectionInfo Interface { get; }
 
 		/// <summary>
 		/// SSID (maximum 32 bytes)
@@ -42,15 +42,52 @@ namespace ManagedNativeWifi
 		public string ProfileName { get; }
 
 		/// <summary>
+		/// Indicates whether the network is connectable or not.
+		/// </summary>
+		public bool NetworkConnectable { get; }
+
+		/// <summary>
+		/// Indicates why a network cannot be connected to. This member is only valid when
+		/// <see cref="NetworkConnectable"/> is <c>false</c>.
+		/// </summary>
+		public string WlanNotConnectableReason { get; }
+
+		/// <summary>
+		/// Authentication method of associated wireless LAN
+		/// </summary>
+		public AuthenticationMethod Authentication { get; }
+
+		/// <summary>
+		/// Encryption type of associated wireless LAN
+		/// </summary>
+		public EncryptionType Encryption { get; }
+
+		/// <summary>
+		/// Indicates whether the network is currently connected
+		/// </summary>
+		public bool IsConnected
+		{
+			get
+			{
+				return Interface.IsConnected &&
+					 string.Equals(this.ProfileName, Interface.ProfileName, StringComparison.Ordinal);
+			}
+		}
+
+		/// <summary>
 		/// Constructor
 		/// </summary>
 		public AvailableNetworkPack(
-			InterfaceInfo interfaceInfo,
+			InterfaceConnectionInfo interfaceInfo,
 			NetworkIdentifier ssid,
 			BssType bssType,
 			int signalQuality,
 			bool isSecurityEnabled,
-			string profileName)
+			string profileName,
+			bool isNetworkConnectable,
+			string wlanNotConnectableReason,
+			AuthenticationMethod authenticationMethod,
+			EncryptionType encryptionType)
 		{
 			this.Interface = interfaceInfo;
 			this.Ssid = ssid;
@@ -58,6 +95,10 @@ namespace ManagedNativeWifi
 			this.SignalQuality = signalQuality;
 			this.IsSecurityEnabled = isSecurityEnabled;
 			this.ProfileName = profileName;
+			this.NetworkConnectable = isNetworkConnectable;
+			this.WlanNotConnectableReason = wlanNotConnectableReason;
+			this.Authentication = authenticationMethod;
+			this.Encryption = encryptionType;
 		}
 	}
 
@@ -96,19 +137,27 @@ namespace ManagedNativeWifi
 		/// Constructor
 		/// </summary>
 		public AvailableNetworkGroupPack(
-			InterfaceInfo interfaceInfo,
+			InterfaceConnectionInfo interfaceInfo,
 			NetworkIdentifier ssid,
 			BssType bssType,
 			int signalQuality,
 			bool isSecurityEnabled,
 			string profileName,
+			bool isNetworkConnectable,
+			string wlanNotConnectableReason,
+			AuthenticationMethod authenticationMethod,
+			EncryptionType encryptionType,
 			IEnumerable<BssNetworkPack> bssNetworks) : base(
 				interfaceInfo: interfaceInfo,
 				ssid: ssid,
 				bssType: bssType,
 				signalQuality: signalQuality,
 				isSecurityEnabled: isSecurityEnabled,
-				profileName: profileName)
+				profileName: profileName,
+				isNetworkConnectable: isNetworkConnectable,
+				wlanNotConnectableReason: wlanNotConnectableReason,
+				authenticationMethod: authenticationMethod,
+				encryptionType: encryptionType)
 		{
 			this._bssNetworks = bssNetworks.OrderByDescending(x => x.LinkQuality).ToArray();
 

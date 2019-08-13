@@ -57,11 +57,17 @@ namespace ManagedNativeWifi
 
 		private XElement _connectionModeElement;
 		private XElement _autoSwitchElement;
+		private XElement _keyIsEncrypted;
 
 		/// <summary>
 		/// Whether profile XML is valid
 		/// </summary>
 		public virtual bool IsValid { get; }
+
+		/// <summary>
+		/// KeyType of profile None, networkKey or passPhrase
+		/// </summary>
+		public KeyTypes KeyType { get; }
 
 		/// <summary>
 		/// Constructor
@@ -94,6 +100,16 @@ namespace ManagedNativeWifi
 			EncryptionString = Root.Descendants(XName.Get("encryption", Namespace)).FirstOrDefault()?.Value;
 			if (!EncryptionTypeConverter.TryParse(EncryptionString, out EncryptionType encryption)) return;
 			this.Encryption = encryption;
+
+			/* Retrieve password data */
+			var keyTypeString = Root.Descendants(XName.Get("keyType", Namespace)).FirstOrDefault()?.Value;
+			KeyTypConverter.TryParse(keyTypeString, out KeyTypes keyType);
+			this.KeyType = keyType;
+
+			_keyIsEncrypted = Root.Descendants(XName.Get("protected", Namespace)).FirstOrDefault();
+
+			var keyMaterialString = Root.Descendants(XName.Get("keyMaterial", Namespace)).FirstOrDefault()?.Value;
+			this.KeyValue = keyMaterialString;
 
 			//Debug.WriteLine("SSID: {0}, BssType: {1}, Authentication: {2}, Encryption: {3}",
 			//	Ssid,
@@ -189,6 +205,20 @@ namespace ManagedNativeWifi
 				}
 				_autoSwitchElement.Value = value.ToString().ToLower();
 			}
+		}
+
+		/// <summary>
+		/// Returns the network key or passphrase as a string.
+		/// https://docs.microsoft.com/en-us/windows/desktop/nativewifi/wlan-profileschema-keymaterial-sharedkey-element
+		/// </summary>
+		public string KeyValue { get; }
+
+		/// <summary>
+		/// Returns whether the key is encrypted.
+		/// </summary>
+		public bool KeyIsEncrypted
+		{
+			get => ((bool?)_keyIsEncrypted).GetValueOrDefault();
 		}
 
 		/// <summary>

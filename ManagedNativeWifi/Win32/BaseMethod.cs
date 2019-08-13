@@ -300,10 +300,18 @@ namespace ManagedNativeWifi.Win32
 					WlanFreeMemory(profileList);
 			}
 		}
-
+		/// <summary>
+		/// By default, the permissions for retrieving the plain text key is allowed only to the members
+		/// of the Administrators group on a local computer. If the calling thread lacks the required permissions,
+		/// the WlanGetProfile function returns the encrypted key in the keyMaterial element of the profile returned
+		/// in the buffer pointed to by the pstrProfileXml parameter. No error is returned if the calling thread
+		/// lacks the required permissions.
+		/// https://docs.microsoft.com/en-us/windows/desktop/api/wlanapi/ne-wlanapi-_wlan_securable_object
+		/// https://docs.microsoft.com/en-us/windows/desktop/api/wlanapi/nf-wlanapi-wlangetprofile
+		/// </summary>
 		public static string GetProfile(SafeClientHandle clientHandle, Guid interfaceId, string profileName, out uint profileTypeFlag)
 		{
-			uint flags = 0U;
+			uint flags = WLAN_PROFILE_GET_PLAINTEXT_KEY;
 			var result = WlanGetProfile(
 				clientHandle,
 				interfaceId,
@@ -338,6 +346,27 @@ namespace ManagedNativeWifi.Win32
 			// ERROR_BAD_PROFILE will be returned if the profile xml is not valid.
 			// ERROR_NO_MATCH will be returned if the capability specified in the profile is not supported.
 			return CheckResult(nameof(WlanSetProfile), result, false, pdwReasonCode);
+		}
+
+		public static bool SetProfileEapXmlUserData(SafeClientHandle clientHandle, Guid interfaceId, string profileName, SetEapUserDataMode eapUserDataModeFlag, string userDataXML)
+		{
+			var result = WlanSetProfileEapXmlUserData(
+				clientHandle,
+				interfaceId,
+				profileName,
+				eapUserDataModeFlag,
+				userDataXML,
+				IntPtr.Zero);
+
+			//ERROR_ACCESS_DENIED Access is denied.
+			//ERROR_BAD_PROFILE The network connection profile is corrupted.
+			//ERROR_INVALID_PARAMETER A parameter is incorrect.
+			//ERROR_INVALID_HANDLE A handle is invalid.
+			//ERROR_NOT_ENOUGH_MEMORY Not enough storage is available to process this command.
+			//ERROR_NOT_SUPPORTED The request is not supported.
+			//ERROR_SERVICE_NOT_ACTIVE The service has not been started.
+			//RPC_STATUS Various error codes.
+			return CheckResult(nameof(WlanSetProfileEapXmlUserData), result, false);
 		}
 
 		public static bool SetProfilePosition(SafeClientHandle clientHandle, Guid interfaceId, string profileName, uint position)
@@ -620,6 +649,25 @@ namespace ManagedNativeWifi.Win32
 			}
 
 			return message.ToString();
+		}
+
+		/// <summary>
+		/// Gets a string that describes a specified reason code.
+		/// </summary>
+		/// <param name="reasonCode">The reason code.</param>
+		/// <returns>The string.</returns>
+		/// https://docs.microsoft.com/en-us/windows/desktop/api/wlanapi/nf-wlanapi-wlanreasoncodetostring
+		public static string GetStringForReasonCode(uint reasonCode)
+		{
+			StringBuilder buff = new StringBuilder(1024); // the 1024 size here is arbitrary; the WlanReasonCodeToString docs fail to specify a recommended size
+
+			if (WlanReasonCodeToString(reasonCode, buff.Capacity, buff, IntPtr.Zero) != ERROR_SUCCESS)
+			{
+				buff.Clear(); // Not sure if we get junk in the stringbuilder buffer from WlanReasonCodeToString, clearing it to be sure. 
+				buff.Append("Failed to retrieve reason code, probably too small buffer.");
+			}
+
+			return buff.ToString();
 		}
 
 		#endregion

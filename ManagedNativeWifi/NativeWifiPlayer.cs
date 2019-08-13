@@ -181,6 +181,12 @@ namespace ManagedNativeWifi
 			NativeWifi.SetProfile(_client, interfaceId, profileType, profileXml, profileSecurity, overwrite);
 
 		/// <summary>
+		/// Sets the Extensible Authentication Protocol (EAP) user credentials as specified by an XML string.
+		/// </summary>
+		public bool SetEAPProfile(Guid interfaceId, string profileName, string userDataXML) =>
+			NativeWifi.SetEAPProfile(_client, interfaceId, profileName, userDataXML);
+
+		/// <summary>
 		/// Sets the position of a specified wireless profile in preference order.
 		/// </summary>
 		public bool SetProfilePosition(Guid interfaceId, string profileName, int position) =>
@@ -221,5 +227,17 @@ namespace ManagedNativeWifi
 		/// </summary>
 		public Task<bool> DisconnectNetworkAsync(Guid interfaceId, TimeSpan timeout, CancellationToken cancellationToken) =>
 			NativeWifi.DisconnectNetworkAsync(_client, interfaceId, timeout, cancellationToken);
+
+		/// <summary>
+		/// Turns on the radio of a specified wireless interface (software radio state only).
+		/// </summary>
+		public bool TurnOnInterfaceRadio(Guid interfaceId) =>
+			NativeWifi.TurnInterfaceRadio(_client, interfaceId, DOT11_RADIO_STATE.dot11_radio_state_on);
+
+		/// <summary>
+		/// Turns off the radio of a specified wireless interface (software radio state only).
+		/// </summary>
+		public bool TurnOffInterfaceRadio(Guid interfaceId) =>
+			NativeWifi.TurnInterfaceRadio(_client, interfaceId, DOT11_RADIO_STATE.dot11_radio_state_off);
 	}
 }

@@ -4,6 +4,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
+using static ManagedNativeWifi.Win32.NativeMethod;
+
 namespace ManagedNativeWifi
 {
 	/// <summary>
@@ -11,6 +13,7 @@ namespace ManagedNativeWifi
 	/// </summary>
 	/// <remarks>
 	/// https://msdn.microsoft.com/en-us/library/windows/desktop/ms706969.aspx
+	/// https://docs.microsoft.com/en-us/windows/desktop/nativewifi/wlan-profileschema-authencryption-security-element
 	/// </remarks>
 	public enum EncryptionType
 	{
@@ -37,6 +40,27 @@ namespace ManagedNativeWifi
 
 	internal static class EncryptionTypeConverter
 	{
+		public static bool TryConvert(DOT11_CIPHER_ALGORITHM source, out EncryptionType encryption)
+		{
+			switch (source)
+			{
+				case DOT11_CIPHER_ALGORITHM.DOT11_CIPHER_ALGO_NONE:
+					encryption = EncryptionType.None;
+					return true;
+				case DOT11_CIPHER_ALGORITHM.DOT11_CIPHER_ALGO_TKIP:
+					encryption = EncryptionType.TKIP;
+					return true;
+				case DOT11_CIPHER_ALGORITHM.DOT11_CIPHER_ALGO_CCMP:
+					encryption = EncryptionType.AES;
+					return true;
+				case DOT11_CIPHER_ALGORITHM.DOT11_CIPHER_ALGO_WEP:
+					encryption = EncryptionType.WEP;
+					return true;
+			}
+			encryption = default(EncryptionType);
+			return false;
+		}
+
 		public static bool TryParse(string source, out EncryptionType encryption)
 		{
 			switch (source)

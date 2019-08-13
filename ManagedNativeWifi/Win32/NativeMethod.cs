@@ -115,6 +115,15 @@ namespace ManagedNativeWifi.Win32
 			IntPtr pReserved,
 			out uint pdwReasonCode); // WLAN_REASON_CODE
 
+		[DllImport("wlanapi.dll")]
+		public static extern uint WlanSetProfileEapXmlUserData(
+			SafeClientHandle hClientHandle,
+			[MarshalAs(UnmanagedType.LPStruct)] Guid pInterfaceGuid,
+			[MarshalAs(UnmanagedType.LPWStr)] string strProfileName,
+			SetEapUserDataMode dwFlags,
+			[MarshalAs(UnmanagedType.LPWStr)] string strUserDataXML,
+			IntPtr pReserved);
+
 		[DllImport("Wlanapi.dll")]
 		public static extern uint WlanSetProfilePosition(
 			SafeClientHandle hClientHandle,
@@ -582,6 +591,19 @@ namespace ManagedNativeWifi.Win32
 
 		#region Enum
 
+		/// <summary>
+		/// A set of flags that modify the behavior of the function: WlanSetProfileEapUserData
+		/// 
+		/// On Windows Vista and Windows Server 2008, this parameter is reserved and should be set to zero.		
+		/// On Windows 7, Windows Server 2008 R2, and later, this parameter can be one of the following values.
+		/// </summary>
+		[Flags]
+		public enum SetEapUserDataMode : uint
+		{
+			None = 0x00000000,
+			WlanSetEaphostDataAllUsers = 0x00000001
+		}
+
 		public enum WLAN_INTERFACE_STATE
 		{
 			wlan_interface_state_not_ready = 0,
@@ -742,6 +764,8 @@ namespace ManagedNativeWifi.Win32
 		}
 
 		#endregion
+
+		public const uint WLAN_PROFILE_GET_PLAINTEXT_KEY = 0x00000004;
 
 		public const uint WLAN_AVAILABLE_NETWORK_INCLUDE_ALL_ADHOC_PROFILES = 0x00000001;
 		public const uint WLAN_AVAILABLE_NETWORK_INCLUDE_ALL_MANUAL_HIDDEN_PROFILES = 0x00000002;
